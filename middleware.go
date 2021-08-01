@@ -17,9 +17,10 @@ import (
 )
 
 type Middleware struct {
-	userDetailsService  UserDetailsService
-	sessionStore        *sessions.FilesystemStore
-	pathConfig          PathConfig
+	userDetailsService UserDetailsService
+	sessionStore       *sessions.FilesystemStore
+	pathConfig         PathConfig
+	config             Config
 }
 
 type PathConfig struct {
@@ -29,6 +30,11 @@ type PathConfig struct {
 	LogoutPath          string
 	IgnoredPatterns     []string
 	NonRedirectPatterns []string
+}
+
+type Config struct {
+	SaveRequestUri               bool
+	IncludeHostInSavedRequestUri bool
 }
 
 const (
@@ -52,11 +58,12 @@ func init() {
 	logger = slog.GetLogger()
 }
 
-func NewMiddleware(userDetailsService UserDetailsService, sessionStore *sessions.FilesystemStore, pathConfig PathConfig) *Middleware {
+func NewMiddleware(userDetailsService UserDetailsService, sessionStore *sessions.FilesystemStore, pathConfig PathConfig, config Config) *Middleware {
 	return &Middleware{
 		userDetailsService: userDetailsService,
 		sessionStore:       sessionStore,
 		pathConfig:         pathConfig,
+		config:             config,
 	}
 }
 
@@ -348,7 +355,13 @@ func (middleware *Middleware) unauthorized(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		session.Values[savedRequestUriSessionKey] = r.RequestURI
+		if middleware.config.SaveRequestUri {
+			if middleware.config.IncludeHostInSavedRequestUri {
+				session.Values[savedRequestUriSessionKey] = "//" + r.Host + r.RequestURI
+			} else {
+				session.Values[savedRequestUriSessionKey] = r.RequestURI
+			}
+		}
 
 		err = session.Save(r, w)
 		if err != nil {
