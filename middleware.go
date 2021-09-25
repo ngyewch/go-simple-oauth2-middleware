@@ -118,9 +118,9 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 
 		gothSession, err := middleware.getGothSession(githubProviderName, r)
 		if err != nil {
-			logger.Errorf("%v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			logger.Warnf("%v", err)
+			//http.Error(w, err.Error(), http.StatusInternalServerError)
+			//return
 		}
 
 		if gothSession == nil {
