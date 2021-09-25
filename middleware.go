@@ -350,7 +350,13 @@ func (middleware *Middleware) unauthorized(w http.ResponseWriter, r *http.Reques
 	} else {
 		session, err := middleware.sessionStore.Get(r, cookieName)
 		if err != nil {
-			logger.Errorf("%v", err)
+			logger.Warnf("%v", err)
+			//http.Error(w, err.Error(), http.StatusInternalServerError)
+			//return
+		}
+
+		if session == nil {
+			session, err = middleware.sessionStore.New(r, cookieName)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
