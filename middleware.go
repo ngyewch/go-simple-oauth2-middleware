@@ -81,7 +81,7 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 				githubProvider := provider.(*github.Provider)
 				u, err := url.Parse(githubProvider.CallbackURL)
 				if err != nil {
-					logger.Fatalf("%v", err)
+					logger.ErrorF("%v", err)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -93,7 +93,7 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 				googleProvider := provider.(*google.Provider)
 				u, err := url.Parse(googleProvider.CallbackURL)
 				if err != nil {
-					logger.Fatalf("%v", err)
+					logger.ErrorF("%v", err)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -118,7 +118,7 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 
 		gothSession, err := middleware.getGothSession(githubProviderName, r)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.ErrorF("%v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -130,7 +130,7 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 
 		gothUser, err := middleware.GetGothUser(r)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.ErrorF("%v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -141,7 +141,7 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 
 		userDetails, exists, err := middleware.userDetailsService.GetUserDetails(gothUser)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.ErrorF("%v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -179,7 +179,7 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 func (middleware *Middleware) beginAuthForProviderName(providerName string, w http.ResponseWriter, r *http.Request) {
 	provider, err := goth.GetProvider(providerName)
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -189,7 +189,7 @@ func (middleware *Middleware) beginAuthForProviderName(providerName string, w ht
 		nonceBytes := make([]byte, 64)
 		_, err := io.ReadFull(rand.Reader, nonceBytes)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.ErrorF("%v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -198,21 +198,21 @@ func (middleware *Middleware) beginAuthForProviderName(providerName string, w ht
 
 	gothSession, err := provider.BeginAuth(state)
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	authUrl, err := gothSession.GetAuthURL()
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	err = middleware.setGothSession(providerName, gothSession, w, r)
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -223,21 +223,21 @@ func (middleware *Middleware) beginAuthForProviderName(providerName string, w ht
 func (middleware *Middleware) completeAuthForProviderName(providerName string, w http.ResponseWriter, r *http.Request) {
 	gothSession, err := middleware.getGothSession(providerName, r)
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	rawAuthURL, err := gothSession.GetAuthURL()
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	authURL, err := url.Parse(rawAuthURL)
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -251,14 +251,14 @@ func (middleware *Middleware) completeAuthForProviderName(providerName string, w
 	originalState := authURL.Query().Get("state")
 	if originalState != "" && (originalState != reqState) {
 		err = errors.New("state token mismatch")
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	provider, err := goth.GetProvider(providerName)
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -269,7 +269,7 @@ func (middleware *Middleware) completeAuthForProviderName(providerName string, w
 		if params.Encode() == "" && r.Method == "POST" {
 			err = r.ParseForm()
 			if err != nil {
-				logger.Fatalf("%v", err)
+				logger.ErrorF("%v", err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -279,21 +279,21 @@ func (middleware *Middleware) completeAuthForProviderName(providerName string, w
 		// get new token and retry fetch
 		_, err = gothSession.Authorize(provider, params)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.ErrorF("%v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		err = middleware.setGothSession(providerName, gothSession, w, r)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.ErrorF("%v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		gothUser, err = provider.FetchUser(gothSession)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.ErrorF("%v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -301,14 +301,14 @@ func (middleware *Middleware) completeAuthForProviderName(providerName string, w
 
 	err = middleware.setGothUser(gothUser, w, r)
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	session, err := middleware.sessionStore.Get(r, cookieName)
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -325,7 +325,7 @@ func (middleware *Middleware) completeAuthForProviderName(providerName string, w
 func (middleware *Middleware) logout(w http.ResponseWriter, r *http.Request) {
 	session, err := middleware.sessionStore.Get(r, cookieName)
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -336,7 +336,7 @@ func (middleware *Middleware) logout(w http.ResponseWriter, r *http.Request) {
 
 	err = session.Save(r, w)
 	if err != nil {
-		logger.Fatalf("%v", err)
+		logger.ErrorF("%v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -350,7 +350,7 @@ func (middleware *Middleware) unauthorized(w http.ResponseWriter, r *http.Reques
 	} else {
 		session, err := middleware.sessionStore.Get(r, cookieName)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.ErrorF("%v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -365,7 +365,7 @@ func (middleware *Middleware) unauthorized(w http.ResponseWriter, r *http.Reques
 
 		err = session.Save(r, w)
 		if err != nil {
-			logger.Fatalf("%v", err)
+			logger.ErrorF("%v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
