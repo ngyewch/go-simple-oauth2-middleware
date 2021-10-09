@@ -17,10 +17,10 @@ import (
 )
 
 type Middleware struct {
-	userDetailsService UserDetailsService
-	sessionStore       *sessions.FilesystemStore
-	pathConfig         PathConfig
-	config             Config
+	sessionStore *sessions.FilesystemStore
+	pathConfig   PathConfig
+	config       Config
+	authorizers  []Authorizer
 }
 
 type PathConfig struct {
@@ -43,11 +43,7 @@ const (
 	googleProviderName            = "google"
 	gothUserSessionKey            = "__gothUser__"
 	savedRequestUriSessionKey     = "__savedRequestUri__"
-	userNotFoundMessage           = "You are not authorized to access this system."
-	userAccountDisabledMessage    = "You are not authorized to access this system."
-	userAccountExpiredMessage     = "You are not authorized to access this system."
-	userAccountLockedMessage      = "You are not authorized to access this system."
-	userCredentialsExpiredMessage = "You are not authorized to access this system."
+	userNotAuthorizedMessage      = "You are not authorized to access this system."
 )
 
 var (
@@ -58,12 +54,22 @@ func init() {
 	logger = slog.GetLogger()
 }
 
+// Deprecated: Use NewMiddlewareV2
 func NewMiddleware(userDetailsService UserDetailsService, sessionStore *sessions.FilesystemStore, pathConfig PathConfig, config Config) *Middleware {
 	return &Middleware{
-		userDetailsService: userDetailsService,
-		sessionStore:       sessionStore,
-		pathConfig:         pathConfig,
-		config:             config,
+		sessionStore: sessionStore,
+		pathConfig:   pathConfig,
+		config:       config,
+		authorizers:  []Authorizer{NewDefaultUserAuthorizer(userDetailsService)},
+	}
+}
+
+func NewMiddlewareV2(sessionStore *sessions.FilesystemStore, pathConfig PathConfig, config Config, authorizers ...Authorizer) *Middleware {
+	return &Middleware{
+		sessionStore: sessionStore,
+		pathConfig:   pathConfig,
+		config:       config,
+		authorizers:  authorizers,
 	}
 }
 
@@ -139,36 +145,17 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		userDetails, exists, err := middleware.userDetailsService.GetUserDetails(gothUser)
-		if err != nil {
-			logger.Errorf("%v", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+		var authorization *Authorization
+		for _, authorizer := range middleware.authorizers {
+			a, err := authorizer.Authorize(gothUser)
+			if err == nil && a != nil {
+				authorization = a
+				break
+			}
 		}
-
-		if !exists {
-			logger.Warnf("user %s does not exist", gothUser.NickName)
-			middleware.forbidden(userNotFoundMessage, w, r)
-			return
-		}
-		if userDetails.AccountDisabled {
-			logger.Warnf("user %s account disabled", gothUser.NickName)
-			middleware.forbidden(userAccountDisabledMessage, w, r)
-			return
-		}
-		if userDetails.AccountExpired {
-			logger.Warnf("user %s account expired", gothUser.NickName)
-			middleware.forbidden(userAccountExpiredMessage, w, r)
-			return
-		}
-		if userDetails.AccountLocked {
-			logger.Warnf("user %s account locked", gothUser.NickName)
-			middleware.forbidden(userAccountLockedMessage, w, r)
-			return
-		}
-		if userDetails.CredentialsExpired {
-			logger.Warnf("user %s credentials expired", gothUser.NickName)
-			middleware.forbidden(userCredentialsExpiredMessage, w, r)
+		if authorization == nil {
+			logger.Warnf("user %s not authorized", gothUser.NickName)
+			middleware.forbidden(userNotAuthorizedMessage, w, r)
 			return
 		}
 
