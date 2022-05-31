@@ -3,6 +3,7 @@ package go_simple_oauth2_middleware
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/bmatcuk/doublestar/v4"
@@ -38,12 +39,12 @@ type Config struct {
 }
 
 const (
-	cookieName                    = "goth"
-	githubProviderName            = "github"
-	googleProviderName            = "google"
-	gothUserSessionKey            = "__gothUser__"
-	savedRequestUriSessionKey     = "__savedRequestUri__"
-	userNotAuthorizedMessage      = "You are not authorized to access this system."
+	cookieName                = "goth"
+	githubProviderName        = "github"
+	googleProviderName        = "google"
+	gothUserSessionKey        = "__gothUser__"
+	savedRequestUriSessionKey = "__savedRequestUri__"
+	userNotAuthorizedMessage  = "You are not authorized to access this system."
 )
 
 var (
@@ -426,7 +427,17 @@ func (middleware *Middleware) GetGothUser(r *http.Request) (*goth.User, error) {
 		return nil, nil
 	}
 
-	gothUser := value.(goth.User)
+	gothUserBytes, ok := value.([]byte)
+	if !ok {
+		return nil, nil
+	}
+
+	var gothUser goth.User
+	err = json.Unmarshal(gothUserBytes, &gothUser)
+	if err != nil {
+		return nil, err
+	}
+
 	return &gothUser, nil
 }
 
@@ -436,7 +447,12 @@ func (middleware *Middleware) setGothUser(gothUser goth.User, w http.ResponseWri
 		return err
 	}
 
-	session.Values[gothUserSessionKey] = gothUser
+	gothUserBytes, err := json.Marshal(gothUser)
+	if err != nil {
+		return err
+	}
+
+	session.Values[gothUserSessionKey] = gothUserBytes
 	err = session.Save(r, w)
 	if err != nil {
 		return err
