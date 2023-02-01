@@ -10,6 +10,7 @@ import (
 	slog "github.com/go-eden/slf4go"
 	"github.com/gorilla/sessions"
 	"github.com/markbates/goth"
+	"github.com/markbates/goth/providers/auth0"
 	"github.com/markbates/goth/providers/github"
 	"github.com/markbates/goth/providers/google"
 	"io"
@@ -42,6 +43,7 @@ const (
 	cookieName                = "goth"
 	githubProviderName        = "github"
 	googleProviderName        = "google"
+	auth0ProviderName         = "auth0"
 	gothUserSessionKey        = "__gothUser__"
 	savedRequestUriSessionKey = "__savedRequestUri__"
 	userNotAuthorizedMessage  = "You are not authorized to access this system."
@@ -99,6 +101,18 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 			} else if providerName == googleProviderName {
 				googleProvider := provider.(*google.Provider)
 				u, err := url.Parse(googleProvider.CallbackURL)
+				if err != nil {
+					logger.Errorf("%v", err)
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				if r.URL.Path == u.Path {
+					middleware.completeAuthForProviderName(providerName, w, r)
+					return
+				}
+			} else if providerName == auth0ProviderName {
+				auth0Provider := provider.(*auth0.Provider)
+				u, err := url.Parse(auth0Provider.CallbackURL)
 				if err != nil {
 					logger.Errorf("%v", err)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
