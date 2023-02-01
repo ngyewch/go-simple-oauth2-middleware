@@ -1,12 +1,12 @@
 module github.com/ngyewch/go-simple-oauth2-middleware
 
-go 1.17
+go 1.19
 
 require (
-	github.com/bmatcuk/doublestar/v4 v4.0.2
+	github.com/bmatcuk/doublestar/v4 v4.6.0
 	github.com/go-eden/slf4go v1.1.2
 	github.com/gorilla/sessions v1.2.1
-	github.com/markbates/goth v1.72.0
+	github.com/markbates/goth v1.76.0
 )
 
 require (
