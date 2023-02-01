@@ -124,6 +124,7 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 				}
 			}
 		}
+
 		if middleware.pathConfig.LogoutPath != "" {
 			if r.URL.Path == middleware.pathConfig.LogoutPath {
 				middleware.logout(w, r)
@@ -137,11 +138,18 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		gothSession, err := middleware.getGothSession(githubProviderName, r)
-		if err != nil {
-			logger.Warnf("%v", err)
-			//http.Error(w, err.Error(), http.StatusInternalServerError)
-			//return
+		var gothSession goth.Session = nil
+		for providerName, _ := range goth.GetProviders() {
+			s, err := middleware.getGothSession(providerName, r)
+			if err != nil {
+				logger.Warnf("%v", err)
+				//http.Error(w, err.Error(), http.StatusInternalServerError)
+				//return
+			}
+			if s != nil {
+				gothSession = s
+				break
+			}
 		}
 
 		if gothSession == nil {
