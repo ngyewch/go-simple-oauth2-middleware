@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bmatcuk/doublestar/v4"
-	slog "github.com/go-eden/slf4go"
 	"github.com/gorilla/sessions"
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/providers/auth0"
 	"github.com/markbates/goth/providers/github"
 	"github.com/markbates/goth/providers/google"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 )
@@ -49,14 +49,6 @@ const (
 	userNotAuthorizedMessage  = "You are not authorized to access this system."
 )
 
-var (
-	logger slog.Logger
-)
-
-func init() {
-	logger = slog.GetLogger()
-}
-
 // Deprecated: Use NewMiddlewareV2
 func NewMiddleware(userDetailsService UserDetailsService, sessionStore *sessions.FilesystemStore, pathConfig PathConfig, config Config) *Middleware {
 	return &Middleware{
@@ -90,7 +82,9 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 				githubProvider := provider.(*github.Provider)
 				u, err := url.Parse(githubProvider.CallbackURL)
 				if err != nil {
-					logger.Errorf("%v", err)
+					slog.Error("internal server error",
+						slog.Any("err", err),
+					)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -102,7 +96,9 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 				googleProvider := provider.(*google.Provider)
 				u, err := url.Parse(googleProvider.CallbackURL)
 				if err != nil {
-					logger.Errorf("%v", err)
+					slog.Error("internal server error",
+						slog.Any("err", err),
+					)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -114,7 +110,9 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 				auth0Provider := provider.(*auth0.Provider)
 				u, err := url.Parse(auth0Provider.CallbackURL)
 				if err != nil {
-					logger.Errorf("%v", err)
+					slog.Error("internal server error",
+						slog.Any("err", err),
+					)
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
@@ -142,7 +140,9 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 		for providerName, _ := range goth.GetProviders() {
 			s, err := middleware.getGothSession(providerName, r)
 			if err != nil {
-				logger.Warnf("%v", err)
+				slog.Warn("could not get goth session",
+					slog.Any("err", err),
+				)
 				//http.Error(w, err.Error(), http.StatusInternalServerError)
 				//return
 			}
@@ -159,7 +159,9 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 
 		gothUser, err := middleware.GetGothUser(r)
 		if err != nil {
-			logger.Errorf("%v", err)
+			slog.Error("could not get goth user",
+				slog.Any("err", err),
+			)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -177,7 +179,9 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 			}
 		}
 		if authorization == nil {
-			logger.Warnf("user %s not authorized", gothUser.NickName)
+			slog.Warn("user not authorized",
+				slog.String("user", gothUser.NickName),
+			)
 			middleware.forbidden(userNotAuthorizedMessage, w, r)
 			return
 		}
@@ -189,7 +193,9 @@ func (middleware *Middleware) Middleware(next http.Handler) http.Handler {
 func (middleware *Middleware) beginAuthForProviderName(providerName string, w http.ResponseWriter, r *http.Request) {
 	provider, err := goth.GetProvider(providerName)
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -199,7 +205,9 @@ func (middleware *Middleware) beginAuthForProviderName(providerName string, w ht
 		nonceBytes := make([]byte, 64)
 		_, err := io.ReadFull(rand.Reader, nonceBytes)
 		if err != nil {
-			logger.Errorf("%v", err)
+			slog.Error("internal server error",
+				slog.Any("err", err),
+			)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -208,21 +216,27 @@ func (middleware *Middleware) beginAuthForProviderName(providerName string, w ht
 
 	gothSession, err := provider.BeginAuth(state)
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	authUrl, err := gothSession.GetAuthURL()
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	err = middleware.setGothSession(providerName, gothSession, w, r)
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -233,21 +247,27 @@ func (middleware *Middleware) beginAuthForProviderName(providerName string, w ht
 func (middleware *Middleware) completeAuthForProviderName(providerName string, w http.ResponseWriter, r *http.Request) {
 	gothSession, err := middleware.getGothSession(providerName, r)
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	rawAuthURL, err := gothSession.GetAuthURL()
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	authURL, err := url.Parse(rawAuthURL)
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -261,14 +281,18 @@ func (middleware *Middleware) completeAuthForProviderName(providerName string, w
 	originalState := authURL.Query().Get("state")
 	if originalState != "" && (originalState != reqState) {
 		err = errors.New("state token mismatch")
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	provider, err := goth.GetProvider(providerName)
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -279,7 +303,9 @@ func (middleware *Middleware) completeAuthForProviderName(providerName string, w
 		if params.Encode() == "" && r.Method == "POST" {
 			err = r.ParseForm()
 			if err != nil {
-				logger.Errorf("%v", err)
+				slog.Error("internal server error",
+					slog.Any("err", err),
+				)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -289,21 +315,27 @@ func (middleware *Middleware) completeAuthForProviderName(providerName string, w
 		// get new token and retry fetch
 		_, err = gothSession.Authorize(provider, params)
 		if err != nil {
-			logger.Errorf("%v", err)
+			slog.Error("internal server error",
+				slog.Any("err", err),
+			)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		err = middleware.setGothSession(providerName, gothSession, w, r)
 		if err != nil {
-			logger.Errorf("%v", err)
+			slog.Error("internal server error",
+				slog.Any("err", err),
+			)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		gothUser, err = provider.FetchUser(gothSession)
 		if err != nil {
-			logger.Errorf("%v", err)
+			slog.Error("internal server error",
+				slog.Any("err", err),
+			)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -311,14 +343,18 @@ func (middleware *Middleware) completeAuthForProviderName(providerName string, w
 
 	err = middleware.setGothUser(gothUser, w, r)
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	session, err := middleware.sessionStore.Get(r, cookieName)
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -335,7 +371,9 @@ func (middleware *Middleware) completeAuthForProviderName(providerName string, w
 func (middleware *Middleware) logout(w http.ResponseWriter, r *http.Request) {
 	session, err := middleware.sessionStore.Get(r, cookieName)
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -346,7 +384,9 @@ func (middleware *Middleware) logout(w http.ResponseWriter, r *http.Request) {
 
 	err = session.Save(r, w)
 	if err != nil {
-		logger.Errorf("%v", err)
+		slog.Error("internal server error",
+			slog.Any("err", err),
+		)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -360,7 +400,9 @@ func (middleware *Middleware) unauthorized(w http.ResponseWriter, r *http.Reques
 	} else {
 		session, err := middleware.sessionStore.Get(r, cookieName)
 		if err != nil {
-			logger.Warnf("%v", err)
+			slog.Warn("could not get session",
+				slog.Any("err", err),
+			)
 			//http.Error(w, err.Error(), http.StatusInternalServerError)
 			//return
 		}
@@ -381,7 +423,9 @@ func (middleware *Middleware) unauthorized(w http.ResponseWriter, r *http.Reques
 
 		err = session.Save(r, w)
 		if err != nil {
-			logger.Errorf("%v", err)
+			slog.Error("internal server error",
+				slog.Any("err", err),
+			)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
